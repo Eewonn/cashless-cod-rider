@@ -1,6 +1,6 @@
 import { Image, StyleSheet, FlatList, ActivityIndicator, View, Text, TouchableOpacity, Switch, SafeAreaView } from 'react-native';
-import { useEffect, useState } from 'react';
-import { Link } from 'expo-router';
+import { useEffect, useState, useCallback } from 'react';
+import { Link, useFocusEffect } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -15,9 +15,14 @@ export default function HomeScreen() {
   const borderColor = theme === 'dark' ? '#333' : '#eee';
   const secondaryTextColor = theme === 'dark' ? '#aaa' : '#666';
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders();
+      // Auto-refresh every 5 seconds to check for status updates
+      const interval = setInterval(fetchOrders, 5000);
+      return () => clearInterval(interval);
+    }, [])
+  );
 
   const fetchOrders = async () => {
     try {
