@@ -101,10 +101,10 @@ export default function OrderDetailsScreen() {
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'], // Updated from deprecated MediaTypeOptions
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.5,
+      quality: 0.3, // Reduced quality slightly to speed up upload
     });
 
     if (!result.canceled) {
@@ -164,6 +164,41 @@ export default function OrderDetailsScreen() {
     }
   };
 
+
+  const renderPodSection = () => (
+    <View style={{ marginTop: 20 }}>
+      <ThemedText type="subtitle" style={{ marginBottom: 10 }}>Proof of Delivery (Required)</ThemedText>
+      {!podImage ? (
+        <Button 
+          title="Take Photo" 
+          onPress={takePhoto} 
+          disabled={processing} 
+        />
+      ) : (
+        <View>
+          <Image source={{ uri: podImage }} style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 10 }} />
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1 }}>
+               <Button 
+                title="Retake" 
+                onPress={takePhoto} 
+                color="gray"
+                disabled={processing} 
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button 
+                title="Complete Order" 
+                onPress={uploadAndComplete} 
+                color="green"
+                disabled={processing} 
+              />
+            </View>
+          </View>
+        </View>
+      )}
+    </View>
+  );
 
   if (loading) {
     return (
@@ -234,33 +269,7 @@ export default function OrderDetailsScreen() {
               
               <View style={{ height: 1, backgroundColor: '#ccc', marginVertical: 10 }} />
               
-              <ThemedText type="subtitle">Cash Payment (POD)</ThemedText>
-              
-              {!podImage ? (
-                <Button 
-                  title="Take Photo (POD)" 
-                  onPress={takePhoto} 
-                  disabled={processing} 
-                />
-              ) : (
-                <View>
-                  <Image source={{ uri: podImage }} style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 10 }} />
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <Button 
-                      title="Retake" 
-                      onPress={takePhoto} 
-                      color="gray"
-                      disabled={processing} 
-                    />
-                    <Button 
-                      title="Complete Order" 
-                      onPress={uploadAndComplete} 
-                      color="green"
-                      disabled={processing} 
-                    />
-                  </View>
-                </View>
-              )}
+              {renderPodSection()}
             </View>
           )}
 
@@ -286,15 +295,7 @@ export default function OrderDetailsScreen() {
               )}
 
               <View style={{ marginTop: 20, width: '100%', borderTopWidth: 1, borderTopColor: theme === 'dark' ? '#333' : '#eee', paddingTop: 20 }}>
-                  <Button 
-                    title="Complete Order" 
-                    onPress={() => {
-                        // Direct update without Alert to avoid browser/device issues
-                        updateStatus('COMPLETED');
-                    }} 
-                    color="green"
-                    disabled={processing}
-                  />
+                  {renderPodSection()}
               </View>
             </View>
           )}
@@ -305,12 +306,7 @@ export default function OrderDetailsScreen() {
                 <ThemedText type="subtitle" style={{ color: 'green', marginBottom: 10 }}>Payment Verified ✅</ThemedText>
                 <ThemedText style={{ marginBottom: 20 }}>The customer has paid via QR.</ThemedText>
                 <View style={{ width: '100%' }}>
-                  <Button 
-                    title="Complete Order" 
-                    onPress={() => updateStatus('COMPLETED')} 
-                    color="green"
-                    disabled={processing}
-                  />
+                  {renderPodSection()}
                 </View>
              </View>
           )}

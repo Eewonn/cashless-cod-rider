@@ -218,7 +218,10 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       contentType: req.file.mimetype
     });
 
-  if (error) return res.status(500).json({ detail: error.message });
+  if (error) {
+    console.error("Supabase Upload Error:", error);
+    return res.status(500).json({ detail: error.message });
+  }
 
   const { data: publicUrlData } = supabase.storage
     .from('pod')
