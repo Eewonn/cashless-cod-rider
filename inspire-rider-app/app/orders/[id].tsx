@@ -264,7 +264,7 @@ export default function OrderDetailsScreen() {
             />
           )}
 
-          {order.status === 'ARRIVED' && (
+          {order.status === 'ARRIVED' && !showCOD && (
             <View style={{ gap: 10 }}>
               <Button 
                 title="Pay with QRPH" 
@@ -282,21 +282,34 @@ export default function OrderDetailsScreen() {
                 title="Cash on Delivery (COD)" 
                 onPress={() => setShowCOD(true)} 
                 color="#FF9800"
-                disabled={processing || showCOD} 
+                disabled={processing} 
               />
-              
-              {showCOD && (
-                  <View style={[styles.codContainer, { borderColor: '#FF9800' }]}>
-                      <ThemedText type="defaultSemiBold" style={{ color: '#FF9800', marginBottom: 5 }}>Cash Collection</ThemedText>
-                      <ThemedText style={{ marginBottom: 10 }}>Please collect ₱{order.cod_amount} from the customer.</ThemedText>
-                      {renderPodSection()}
-                  </View>
-              )}
             </View>
           )}
 
-          {/* QR Display */}
-          {qrData && (order.status === 'PAYMENT' || order.status === 'ARRIVED') && order.payment_status !== 'PAID' && (
+          {/* COD UI - Show if showCOD is true OR if we are in PAYMENT but user wants to switch */}
+          {showCOD && (order.status === 'ARRIVED' || order.status === 'PAYMENT') && order.payment_status !== 'PAID' && (
+              <View style={[styles.codContainer, { borderColor: '#FF9800' }]}>
+                  <ThemedText type="defaultSemiBold" style={{ color: '#FF9800', marginBottom: 5 }}>Cash Collection</ThemedText>
+                  <ThemedText style={{ marginBottom: 10 }}>Please collect ₱{order.cod_amount} from the customer.</ThemedText>
+                  
+                  {renderPodSection()}
+
+                  <View style={{ marginTop: 15 }}>
+                    <Button 
+                      title="Cancel & Switch to QR" 
+                      onPress={() => {
+                        setShowCOD(false);
+                        if (!qrData) generateQR();
+                      }}
+                      color="#666"
+                    />
+                  </View>
+              </View>
+          )}
+
+          {/* QR Display - Show if NOT showing COD */}
+          {qrData && !showCOD && (order.status === 'PAYMENT' || order.status === 'ARRIVED') && order.payment_status !== 'PAID' && (
             <View style={[styles.qrContainer, { backgroundColor: theme === 'dark' ? '#1E1E1E' : '#fff' }]}>
               <ThemedText type="subtitle">Scan to Pay</ThemedText>
               <Image 
@@ -318,6 +331,16 @@ export default function OrderDetailsScreen() {
 
               <View style={{ marginTop: 20, width: '100%', borderTopWidth: 1, borderTopColor: theme === 'dark' ? '#333' : '#eee', paddingTop: 20 }}>
                   {renderPodSection()}
+              </View>
+
+              <View style={{ marginTop: 15, width: '100%' }}>
+                 <TouchableOpacity 
+                    style={[styles.cameraButton, { backgroundColor: '#FF9800' }]} 
+                    onPress={() => setShowCOD(true)}
+                 >
+                    <Ionicons name="cash-outline" size={24} color="white" style={{ marginRight: 8 }} />
+                    <Text style={styles.cameraButtonText}>Switch to Cash Payment</Text>
+                 </TouchableOpacity>
               </View>
             </View>
           )}

@@ -81,7 +81,8 @@ export default function LoginScreen() {
   return (
     <ThemedView style={styles.container}>
       <ThemedText type="title" style={styles.title}>Welcome Rider</ThemedText>
-      <ThemedText style={styles.subtitle}>Sign in to start delivering</ThemedText>
+      <ThemedText style={{ marginBottom: 20, color: '#0a7ea4', fontSize: 24, fontWeight: 'bold' }}>Scan. Pay. Deliver.</ThemedText>
+      <ThemedText style={styles.subtitle}>Sign In</ThemedText>
       
       <View style={styles.form}>
         <TextInput
