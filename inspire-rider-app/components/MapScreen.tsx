@@ -49,8 +49,9 @@ export default function MapScreen() {
       // Using the same hardcoded rider_id as HomeScreen for consistency
       const response = await client.get('/orders?rider_id=a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
       
-      // Filter orders that have valid coordinates
+      // Filter orders that have valid coordinates AND are not completed
       const validOrders = response.data.filter((order: any) => 
+        order.status !== 'COMPLETED' &&
         order.latitude && order.longitude && 
         !isNaN(parseFloat(order.latitude)) && 
         !isNaN(parseFloat(order.longitude))

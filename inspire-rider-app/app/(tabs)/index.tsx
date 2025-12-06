@@ -23,7 +23,11 @@ export default function HomeScreen() {
     try {
       // Hardcoded rider_id for demo
       const response = await client.get('/orders?rider_id=a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
-      setOrders(response.data);
+      
+      // Filter out completed orders (they belong in History)
+      const activeOrders = response.data.filter((order: any) => order.status !== 'COMPLETED');
+      
+      setOrders(activeOrders);
       setError(null);
     } catch (err) {
       console.error(err);
