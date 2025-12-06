@@ -1,15 +1,33 @@
 import React, { useState } from 'react';
-import { StyleSheet, Button, View, Alert } from 'react-native';
+import { StyleSheet, Button, View, Alert, TouchableOpacity, TextInput } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '@/context/ThemeContext';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const router = useRouter();
+  const { theme } = useTheme();
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter email and password');
+      return;
+    }
+    
+    // For demo purposes, we just set the session
+    await AsyncStorage.setItem('user_profile', JSON.stringify({ email }));
+    router.replace('/(tabs)');
+  };
 
   const signInWithGoogle = async () => {
     setLoading(true);
@@ -33,12 +51,6 @@ export default function LoginScreen() {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
         
         if (result.type === 'success' && result.url) {
-           // Supabase handles the session automatically via the URL listener in lib/supabase.ts
-           // However, we might need to manually parse the URL if auto-detection fails or if we want to be explicit.
-           // For now, let's rely on the deep link handling.
-           
-           // Actually, we need to extract the access_token and refresh_token from the URL hash
-           // and set the session manually if the auto-detection doesn't pick it up immediately.
            const { url } = result;
            const params = new URLSearchParams(url.split('#')[1]);
            const access_token = params.get('access_token');
@@ -49,6 +61,9 @@ export default function LoginScreen() {
                access_token,
                refresh_token,
              });
+             // Also set AsyncStorage for our simple auth check
+             await AsyncStorage.setItem('user_profile', JSON.stringify({ email: 'google_user' }));
+             router.replace('/(tabs)');
            }
         }
       }
@@ -59,11 +74,39 @@ export default function LoginScreen() {
     }
   };
 
+  const inputBorderColor = theme === 'dark' ? '#555' : '#ccc';
+  const inputTextColor = theme === 'dark' ? '#fff' : '#000';
+  const placeholderColor = theme === 'dark' ? '#aaa' : '#888';
+
   return (
     <ThemedView style={styles.container}>
       <ThemedText type="title" style={styles.title}>Welcome Rider</ThemedText>
       <ThemedText style={styles.subtitle}>Sign in to start delivering</ThemedText>
       
+      <View style={styles.form}>
+        <TextInput
+          style={[styles.input, { borderColor: inputBorderColor, color: inputTextColor }]}
+          placeholder="Email"
+          placeholderTextColor={placeholderColor}
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={[styles.input, { borderColor: inputBorderColor, color: inputTextColor }]}
+          placeholder="Password"
+          placeholderTextColor={placeholderColor}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <Button title="Login" onPress={handleLogin} />
+      </View>
+
+      <View style={styles.divider}>
+        <ThemedText>or</ThemedText>
+      </View>
+
       <View style={styles.buttonContainer}>
         <Button 
           title="Sign in with Google" 
@@ -71,6 +114,10 @@ export default function LoginScreen() {
           disabled={loading} 
         />
       </View>
+
+      <TouchableOpacity onPress={() => router.push('/register')} style={{ marginTop: 20 }}>
+        <ThemedText style={{ color: '#0a7ea4' }}>Don't have an account? Register</ThemedText>
+      </TouchableOpacity>
     </ThemedView>
   );
 }
@@ -88,6 +135,21 @@ const styles = StyleSheet.create({
   subtitle: {
     marginBottom: 40,
     opacity: 0.7,
+  },
+  form: {
+    width: '100%',
+    maxWidth: 300,
+    gap: 15,
+    marginBottom: 20,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 15,
+    fontSize: 16,
+  },
+  divider: {
+    marginBottom: 20,
   },
   buttonContainer: {
     width: '100%',

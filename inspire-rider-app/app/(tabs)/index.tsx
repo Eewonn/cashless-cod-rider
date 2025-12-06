@@ -1,6 +1,7 @@
-import { Image, StyleSheet, FlatList, ActivityIndicator, View, Text, TouchableOpacity, Switch, SafeAreaView } from 'react-native';
+import { Image, StyleSheet, FlatList, ActivityIndicator, View, Text, TouchableOpacity, Switch, SafeAreaView, Button } from 'react-native';
 import { useEffect, useState, useCallback } from 'react';
-import { Link, useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -14,6 +15,12 @@ export default function HomeScreen() {
   const { theme, toggleTheme } = useTheme();
   const borderColor = theme === 'dark' ? '#333' : '#eee';
   const secondaryTextColor = theme === 'dark' ? '#aaa' : '#666';
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await AsyncStorage.removeItem('user_profile');
+    router.replace('/login');
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -52,6 +59,9 @@ export default function HomeScreen() {
             <ThemedText style={{ fontSize: 14, color: secondaryTextColor }}>Ready to deliver?</ThemedText>
           </View>
           <View style={styles.themeToggle}>
+            <TouchableOpacity onPress={handleSignOut} style={{ marginRight: 15 }}>
+              <ThemedText style={{ color: 'red', fontSize: 14 }}>Sign Out</ThemedText>
+            </TouchableOpacity>
             <ThemedText style={{ marginRight: 8, fontSize: 12 }}>{theme === 'dark' ? 'Dark' : 'Light'}</ThemedText>
             <Switch 
               value={theme === 'dark'} 
