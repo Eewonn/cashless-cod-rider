@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, Alert, View, Button, Platform, ScrollView } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, Alert, View, Button, Platform, ScrollView, Image } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedView } from '@/components/themed-view';
@@ -56,6 +56,13 @@ export default function RegisterScreen() {
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
+          <View style={{ alignItems: 'center' }}>
+            <Image 
+              source={require('../assets/images/motor.png')} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
           <ThemedText type="title" style={styles.title}>Register</ThemedText>
           <ThemedText style={styles.subtitle}>Create your rider account</ThemedText>
 
@@ -123,6 +130,11 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignSelf: 'center',
   },
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: 20,
+  },
   title: {
     fontSize: 32,
     marginBottom: 10,
@@ -159,5 +171,6 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     letterSpacing: 1,
     textTransform: 'uppercase',
+    color: '#FF3B30',
   }
 });

@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const { createClient } = require('@supabase/supabase-js');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
 
 dotenv.config();
 
@@ -29,6 +30,62 @@ const payrex = require('payrex-node')(payrexSecretKey);
 
 // Multer for file uploads (memory storage for simple upload to Supabase)
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Helper to send Push Notification
+const sendPushNotification = async (riderId, title, body, data = {}) => {
+  try {
+    // Get rider's push token
+    const { data: rider, error } = await supabase
+      .from('riders')
+      .select('push_token')
+      .eq('id', riderId)
+      .single();
+
+    if (error || !rider || !rider.push_token) {
+      console.log(`No push token found for rider ${riderId}`);
+      return;
+    }
+
+    if (!rider.push_token.startsWith('ExponentPushToken')) {
+        console.log(`Invalid push token for rider ${riderId}`);
+        return;
+    }
+
+    const message = {
+      to: rider.push_token,
+      sound: 'default',
+      title: title,
+      body: body,
+      data: data,
+    };
+
+    await axios.post('https://exp.host/--/api/v2/push/send', message);
+    console.log(`Notification sent to rider ${riderId}`);
+
+  } catch (error) {
+    console.error('Error sending push notification:', error);
+  }
+};
+
+// Listen for new orders via Supabase Realtime
+supabase
+  .channel('orders-channel')
+  .on(
+    'postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'orders' },
+    async (payload) => {
+      console.log('New order received via Realtime:', payload);
+      const newOrder = payload.new;
+      if (newOrder.rider_id) {
+        await sendPushNotification(
+          newOrder.rider_id,
+          "New Order Assigned! 📦",
+          `You have a new order: ${newOrder.order_no}`
+        );
+      }
+    }
+  )
+  .subscribe();
 
 // --- Endpoints ---
 
@@ -118,6 +175,32 @@ app.patch('/orders/:order_id/status', async (req, res) => {
       location: (latitude && longitude) ? { lat: latitude, lng: longitude } : null
     }
   });
+
+  // Send Notification for status change (if initiated by system/admin, but here it's mostly rider)
+  // However, if we want to confirm to the rider, or if this endpoint is used by admin:
+  // For now, let's assume this endpoint is shared.
+  // If the status is 'EN_ROUTE' or 'ARRIVED', maybe we don't need to notify the rider as they did it.
+  // But if the status is 'ASSIGNED' (if we had it), we would.
+  
+  // Let's add a generic notification if the status is updated
+  // We need to fetch the order to get the rider_id if we don't have it in the request (we don't)
+  // The update above returns the order in `data`.
+  
+  if (data && data.length > 0) {
+      const updatedOrder = data[0];
+      // Only notify if it's a significant status change that might have come from external source
+      // or just to confirm.
+      // For "New orders assigned", we'd need a create endpoint.
+      // For "Key status changes", let's notify on completion.
+      
+      if (status === 'COMPLETED') {
+          await sendPushNotification(
+              updatedOrder.rider_id,
+              "Order Completed",
+              `Order ${updatedOrder.order_no} has been marked as completed.`
+          );
+      }
+  }
 
   res.json({ status: "success", order: data[0] });
 });
@@ -241,6 +324,25 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   res.json({ url: publicUrlData.publicUrl });
 });
 
+// Helper to send Push Notification (Moved to top)
+// const sendPushNotification = async (riderId, title, body, data = {}) => { ... }
+
+app.post('/riders/:id/push-token', async (req, res) => {
+  const { id } = req.params;
+  const { token } = req.body;
+
+  if (!token) return res.status(400).json({ detail: "Token required" });
+
+  const { error } = await supabase
+    .from('riders')
+    .update({ push_token: token })
+    .eq('id', id);
+
+  if (error) return res.status(500).json({ detail: error.message });
+
+  res.json({ status: "success" });
+});
+
 app.post('/payment/webhook', async (req, res) => {
   const payload = req.body;
 
@@ -255,12 +357,26 @@ app.post('/payment/webhook', async (req, res) => {
 
   if (eventType === 'checkout.session.completed') {
     const sessionId = data.id;
-    await supabase.from('orders').update({
+    
+    // Update order
+    const { data: updatedOrders, error } = await supabase.from('orders').update({
       payment_status: 'PAID',
       payment_method: 'QRPH'
-    }).eq('qr_id', sessionId);
+    }).eq('qr_id', sessionId).select();
     
     console.log(`Payment confirmed for Session ${sessionId}`);
+
+    // Send Notification
+    if (updatedOrders && updatedOrders.length > 0) {
+      const order = updatedOrders[0];
+      if (order.rider_id) {
+        await sendPushNotification(
+          order.rider_id, 
+          "Payment Received! 💰", 
+          `Payment for Order ${order.order_no} has been confirmed via QRPH.`
+        );
+      }
+    }
   }
 
   res.json({ status: "received" });

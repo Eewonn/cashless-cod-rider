@@ -6,6 +6,8 @@ import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ThemeProvider as CustomThemeProvider, useTheme } from '@/context/ThemeContext';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+import client from '@/api/client';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -15,6 +17,24 @@ function RootLayoutNav() {
   const { theme } = useTheme();
   const router = useRouter();
   const segments = useSegments();
+  const { expoPushToken } = usePushNotifications();
+
+  useEffect(() => {
+    if (expoPushToken) {
+      registerToken(expoPushToken);
+    }
+  }, [expoPushToken]);
+
+  const registerToken = async (token: string) => {
+    // Hardcoded rider_id for demo
+    const riderId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+    try {
+      await client.post(`/riders/${riderId}/push-token`, { token });
+      console.log('Push token registered with backend');
+    } catch (e) {
+      console.error('Failed to register push token', e);
+    }
+  };
 
   useEffect(() => {
     const checkAuth = async () => {

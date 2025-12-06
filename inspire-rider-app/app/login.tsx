@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Button, View, Alert, TouchableOpacity, TextInput } from 'react-native';
+import { StyleSheet, Button, View, Alert, TouchableOpacity, TextInput, Image } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
@@ -80,8 +80,13 @@ export default function LoginScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <Image 
+        source={require('../assets/images/motor.png')} 
+        style={styles.logo}
+        resizeMode="contain"
+      />
       <ThemedText type="title" style={styles.title}>Welcome Rider</ThemedText>
-      <ThemedText style={{ marginBottom: 20, color: '#0a7ea4', fontSize: 24, fontWeight: 'bold' }}>Scan. Pay. Deliver.</ThemedText>
+      <ThemedText style={{ marginBottom: 20, color: '#FF3B30', fontSize: 24, fontWeight: 'bold' }}>Scan. Pay. Deliver.</ThemedText>
       <ThemedText style={styles.subtitle}>Sign In</ThemedText>
       
       <View style={styles.form}>
@@ -129,6 +134,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: 20,
   },
   title: {
     marginBottom: 10,
