@@ -50,7 +50,25 @@ app.get('/orders', async (req, res) => {
     .eq('rider_id', rider_id);
 
   if (error) return res.status(500).json({ detail: error.message });
-  res.json(data);
+
+  // Temporary: Inject coordinates if missing so they show up on the map
+  // In production, these should come from the database (latitude/longitude or gps_point)
+  const enrichedData = data.map((order, index) => {
+    if (!order.latitude || !order.longitude) {
+       const mocks = [
+         { latitude: 14.5995, longitude: 120.9842 }, // Manila
+         { latitude: 14.5547, longitude: 121.0244 }, // Makati
+         { latitude: 14.6091, longitude: 121.0223 }, // Cubao
+         { latitude: 14.6333, longitude: 121.0439 }, // Quezon City
+         { latitude: 14.5378, longitude: 121.0014 }  // Pasay
+       ];
+       const mock = mocks[index % mocks.length];
+       return { ...order, ...mock };
+    }
+    return order;
+  });
+
+  res.json(enrichedData);
 });
 
 app.get('/orders/:order_id', async (req, res) => {

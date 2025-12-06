@@ -45,37 +45,21 @@ export default function MapScreen() {
 
   const fetchOrders = async () => {
     try {
-      // Mocking orders with location data for now since the API might not return it yet
-      // In a real scenario: const response = await client.get('/orders');
-      const mockOrders = [
-        {
-          id: '1',
-          customer_name: 'John Doe',
-          latitude: 14.5995,
-          longitude: 120.9842, // Manila
-          status: 'Pending',
-          address: 'Manila City Hall'
-        },
-        {
-          id: '2',
-          customer_name: 'Jane Smith',
-          latitude: 14.5547,
-          longitude: 121.0244, // Makati
-          status: 'Pending',
-          address: 'Ayala Triangle'
-        },
-        {
-          id: '3',
-          customer_name: 'Bob Johnson',
-          latitude: 14.6091,
-          longitude: 121.0223, // Cubao
-          status: 'Pending',
-          address: 'Araneta Coliseum'
-        }
-      ];
-      setOrders(mockOrders);
+      // Fetch real orders from the API
+      // Using the same hardcoded rider_id as HomeScreen for consistency
+      const response = await client.get('/orders?rider_id=a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
+      
+      // Filter orders that have valid coordinates
+      const validOrders = response.data.filter((order: any) => 
+        order.latitude && order.longitude && 
+        !isNaN(parseFloat(order.latitude)) && 
+        !isNaN(parseFloat(order.longitude))
+      );
+      
+      setOrders(validOrders);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching orders for map:", err);
+      // Fallback to empty list or keep previous state on error
     }
   };
 
@@ -115,6 +99,7 @@ export default function MapScreen() {
           urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           maximumZ={19}
           flipY={false}
+          tileSize={256}
         />
 
         {/* Order Markers */}
