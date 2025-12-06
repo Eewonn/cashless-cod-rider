@@ -1,7 +1,8 @@
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, ActivityIndicator, View, Button, ScrollView, Image, Alert, Linking } from 'react-native';
+import { StyleSheet, ActivityIndicator, View, Button, ScrollView, Image, Alert, Linking, TouchableOpacity, Text } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import client from '@/api/client';
@@ -14,6 +15,7 @@ export default function OrderDetailsScreen() {
   const [qrData, setQrData] = useState<any>(null);
   const [processing, setProcessing] = useState(false);
   const [podImage, setPodImage] = useState<string | null>(null);
+  const [showCOD, setShowCOD] = useState(false);
   const { theme } = useTheme();
 
   useEffect(() => {
@@ -169,11 +171,14 @@ export default function OrderDetailsScreen() {
     <View style={{ marginTop: 20 }}>
       <ThemedText type="subtitle" style={{ marginBottom: 10 }}>Proof of Delivery (Required)</ThemedText>
       {!podImage ? (
-        <Button 
-          title="Take Photo" 
+        <TouchableOpacity 
+          style={styles.cameraButton} 
           onPress={takePhoto} 
-          disabled={processing} 
-        />
+          disabled={processing}
+        >
+          <Ionicons name="camera" size={24} color="white" style={{ marginRight: 8 }} />
+          <Text style={styles.cameraButtonText}>Take Photo</Text>
+        </TouchableOpacity>
       ) : (
         <View>
           <Image source={{ uri: podImage }} style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 10 }} />
@@ -262,14 +267,31 @@ export default function OrderDetailsScreen() {
           {order.status === 'ARRIVED' && (
             <View style={{ gap: 10 }}>
               <Button 
-                title="Pay with QR" 
+                title="Pay with QRPH" 
                 onPress={generateQR} 
                 disabled={processing} 
               />
               
-              <View style={{ height: 1, backgroundColor: '#ccc', marginVertical: 10 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#ccc' }} />
+                  <ThemedText style={{ marginHorizontal: 10, fontSize: 12, color: '#888' }}>OR</ThemedText>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#ccc' }} />
+              </View>
+
+              <Button 
+                title="Cash on Delivery (COD)" 
+                onPress={() => setShowCOD(true)} 
+                color="#FF9800"
+                disabled={processing || showCOD} 
+              />
               
-              {renderPodSection()}
+              {showCOD && (
+                  <View style={[styles.codContainer, { borderColor: '#FF9800' }]}>
+                      <ThemedText type="defaultSemiBold" style={{ color: '#FF9800', marginBottom: 5 }}>Cash Collection</ThemedText>
+                      <ThemedText style={{ marginBottom: 10 }}>Please collect ₱{order.cod_amount} from the customer.</ThemedText>
+                      {renderPodSection()}
+                  </View>
+              )}
             </View>
           )}
 
@@ -347,5 +369,24 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 10,
     marginTop: 20,
+  },
+  codContainer: {
+    marginTop: 20,
+    padding: 15,
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  cameraButton: {
+    backgroundColor: '#0a7ea4',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 8,
+  },
+  cameraButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   }
 });
