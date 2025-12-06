@@ -1,17 +1,18 @@
-import { Image, StyleSheet, FlatList, ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
-import { useEffect, useState } from 'react';
+import { StyleSheet, ActivityIndicator, View, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
+import { useState, useCallback } from 'react';
 import { Link, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
 
-import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import client from '@/api/client';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function HistoryScreen() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { theme } = useTheme();
+  const borderColor = theme === 'dark' ? '#333' : '#eee';
 
   useFocusEffect(
     useCallback(() => {
@@ -36,61 +37,61 @@ export default function HistoryScreen() {
   };
 
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Order History</ThemedText>
-      </ThemedView>
-
-      {loading ? (
-        <ActivityIndicator size="large" />
-      ) : error ? (
-        <ThemedText>{error}</ThemedText>
-      ) : orders.length === 0 ? (
-        <ThemedText>No completed orders yet.</ThemedText>
-      ) : (
-        <View style={styles.list}>
-          {orders.map((item: any) => (
-            <Link key={item.id} href={`/orders/${item.id}`} asChild>
-              <TouchableOpacity>
-                <ThemedView style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <ThemedText type="defaultSemiBold">{item.order_no}</ThemedText>
-                    <ThemedText style={{ color: 'green' }}>{item.status}</ThemedText>
-                  </View>
-                  <ThemedText>{item.customer_name}</ThemedText>
-                  <ThemedText>{item.address}</ThemedText>
-                  <ThemedText style={{ marginTop: 4 }}>₱{item.cod_amount}</ThemedText>
-                  {item.pod_url && <ThemedText style={{ fontSize: 12, color: 'gray' }}>📷 POD Uploaded</ThemedText>}
-                </ThemedView>
-              </TouchableOpacity>
-            </Link>
-          ))}
+    <ThemedView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <ThemedText type="title">Order History</ThemedText>
         </View>
-      )}
-    </ParallaxScrollView>
+
+        <ScrollView contentContainerStyle={styles.content}>
+          {loading ? (
+            <ActivityIndicator size="large" />
+          ) : error ? (
+            <ThemedText>{error}</ThemedText>
+          ) : orders.length === 0 ? (
+            <ThemedText>No completed orders yet.</ThemedText>
+          ) : (
+            <View style={styles.list}>
+              {orders.map((item: any) => (
+                <Link key={item.id} href={`/orders/${item.id}`} asChild>
+                  <TouchableOpacity>
+                    <ThemedView style={[styles.card, { borderColor: borderColor }]}>
+                      <View style={styles.cardHeader}>
+                        <ThemedText type="defaultSemiBold">{item.order_no}</ThemedText>
+                        <ThemedText style={{ color: '#4CAF50' }}>{item.status}</ThemedText>
+                      </View>
+                      <ThemedText>{item.customer_name}</ThemedText>
+                      <ThemedText>{item.address}</ThemedText>
+                      <ThemedText style={{ marginTop: 4 }}>₱{item.cod_amount}</ThemedText>
+                      {item.pod_url && <ThemedText style={{ fontSize: 12, color: 'gray' }}>📷 POD Uploaded</ThemedText>}
+                    </ThemedView>
+                  </TouchableOpacity>
+                </Link>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
+  container: {
+    flex: 1,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  safeArea: {
+    flex: 1,
+    paddingTop: 40,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  content: {
+    padding: 20,
   },
   list: {
     gap: 12,
@@ -99,7 +100,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ccc',
     gap: 4,
   },
   cardHeader: {

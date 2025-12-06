@@ -2,6 +2,7 @@ import { Image, StyleSheet, FlatList, ActivityIndicator, View, Text, TouchableOp
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -12,6 +13,7 @@ export default function HomeScreen() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [riderName, setRiderName] = useState('Rider');
   const { theme, toggleTheme } = useTheme();
   const borderColor = theme === 'dark' ? '#333' : '#eee';
   const secondaryTextColor = theme === 'dark' ? '#aaa' : '#666';
@@ -24,12 +26,30 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      loadProfile();
       fetchOrders();
       // Auto-refresh every 5 seconds to check for status updates
       const interval = setInterval(fetchOrders, 5000);
       return () => clearInterval(interval);
     }, [])
   );
+
+  const loadProfile = async () => {
+    try {
+      const profileStr = await AsyncStorage.getItem('user_profile');
+      if (profileStr) {
+        const profile = JSON.parse(profileStr);
+        // Use name if available, otherwise try to use the part of email before @, or fallback to 'Rider'
+        if (profile.name) {
+          setRiderName(profile.name);
+        } else if (profile.email) {
+          setRiderName(profile.email.split('@')[0]);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load profile', e);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -54,21 +74,18 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: borderColor }]}>
-          <View>
-            <ThemedText type="title">Hi, Rider</ThemedText>
+          <View style={{ marginTop: 10 }}>
+            <ThemedText type="title">Hi, {riderName}</ThemedText>
             <ThemedText style={{ fontSize: 14, color: secondaryTextColor }}>Ready to deliver?</ThemedText>
           </View>
-          <View style={styles.themeToggle}>
-            <TouchableOpacity onPress={handleSignOut} style={{ marginRight: 15 }}>
-              <ThemedText style={{ color: 'red', fontSize: 14 }}>Sign Out</ThemedText>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={toggleTheme} style={styles.iconButton}>
+              <Ionicons name={theme === 'dark' ? 'moon' : 'sunny'} size={24} color={theme === 'dark' ? '#fff' : '#000'} />
             </TouchableOpacity>
-            <ThemedText style={{ marginRight: 8, fontSize: 12 }}>{theme === 'dark' ? 'Dark' : 'Light'}</ThemedText>
-            <Switch 
-              value={theme === 'dark'} 
-              onValueChange={toggleTheme}
-              trackColor={{ false: "#767577", true: "#81b0ff" }}
-              thumbColor={theme === 'dark' ? "#f5dd4b" : "#f4f3f4"}
-            />
+            <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
+              <Ionicons name="log-out-outline" size={18} color="white" style={{ marginRight: 4 }} />
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -138,12 +155,29 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomWidth: 1,
   },
-  subtitle: {
-    fontSize: 14,
-  },
-  themeToggle: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+  },
+  iconButton: {
+    padding: 8,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  signOutText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  subtitle: {
+    fontSize: 14,
   },
   content: {
     flex: 1,
