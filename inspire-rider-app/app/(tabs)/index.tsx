@@ -1,5 +1,6 @@
-import { Image, StyleSheet, FlatList, ActivityIndicator, View, Text } from 'react-native';
+import { Image, StyleSheet, FlatList, ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
 import { useEffect, useState } from 'react';
+import { Link } from 'expo-router';
 
 import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
@@ -54,15 +55,19 @@ export default function HomeScreen() {
             <ThemedText>No orders found.</ThemedText>
           ) : (
             orders.map((order: any) => (
-              <ThemedView key={order.id} style={styles.orderCard}>
-                <ThemedText type="subtitle">{order.order_no}</ThemedText>
-                <ThemedText>{order.customer_name}</ThemedText>
-                <ThemedText>{order.address}</ThemedText>
-                <ThemedText type="defaultSemiBold">
-                  COD: ₱{order.cod_amount}
-                </ThemedText>
-                <ThemedText>Status: {order.status}</ThemedText>
-              </ThemedView>
+              <Link key={order.id} href={`/orders/${order.id}`} asChild>
+                <TouchableOpacity>
+                  <ThemedView style={styles.orderCard}>
+                    <ThemedText type="subtitle">{order.order_no}</ThemedText>
+                    <ThemedText>{order.customer_name}</ThemedText>
+                    <ThemedText>{order.address}</ThemedText>
+                    <ThemedText type="defaultSemiBold">
+                      COD: ₱{order.cod_amount}
+                    </ThemedText>
+                    <ThemedText>Status: {order.status}</ThemedText>
+                  </ThemedView>
+                </TouchableOpacity>
+              </Link>
             ))
           )}
         </View>

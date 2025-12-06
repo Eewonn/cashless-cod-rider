@@ -4,10 +4,11 @@ import axios from 'axios';
 // For Android Emulator, use 'http://10.0.2.2:8000'
 // For iOS Simulator, use 'http://localhost:8000'
 // For physical device, use your LAN IP e.g., 'http://192.168.1.x:8000'
-const BASE_URL = 'http://172.16.196.98:8000'; 
+const BASE_URL = 'https://4327cdd3f45f1b.lhr.life'; 
 
 const client = axios.create({
   baseURL: BASE_URL,
+  timeout: 10000, // 10 seconds timeout
   headers: {
     'Content-Type': 'application/json',
   },

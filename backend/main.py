@@ -42,6 +42,7 @@ class Order(BaseModel):
 
 class OrderStatusUpdate(BaseModel):
     status: str
+    pod_url: Optional[str] = None
 
 class PaymentQRRequest(BaseModel):
     order_id: str
@@ -87,12 +88,17 @@ def get_order(order_id: str):
 
 @app.patch("/orders/{order_id}/status")
 def update_order_status(order_id: str, update: OrderStatusUpdate):
-    response = supabase.table('orders').update({'status': update.status}).eq('id', order_id).execute()
+    data = {'status': update.status}
+    if update.pod_url:
+        data['pod_url'] = update.pod_url
+
+    response = supabase.table('orders').update(data).eq('id', order_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Order not found")
     
     # Log event
     supabase.table('events').insert({
+        "id": str(uuid4()),
         "order_id": order_id,
         "type": "status_change",
         "metadata": {"new_status": update.status}
@@ -104,6 +110,10 @@ def update_order_status(order_id: str, update: OrderStatusUpdate):
 def generate_qr(request: PaymentQRRequest):
     # Call PayRex or similar API here
     qr_id = str(uuid4())
+    
+    # Save qr_id to the order so we can look it up later
+    supabase.table('orders').update({'qr_id': qr_id}).eq('id', request.order_id).execute()
+
     # Mock response
     return {
         "qr": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", # 1x1 pixel
