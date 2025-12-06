@@ -137,6 +137,7 @@ app.post('/payment/qr', async (req, res) => {
     res.json({
       qr: qrImage,
       qr_id: sessionId,
+      checkout_url: checkoutUrl,
       expires_at: new Date().toISOString()
     });
 
@@ -168,6 +169,14 @@ app.get('/orders/:order_id/payment-status', async (req, res) => {
     // Use checkoutSessions.retrieve
     const session = await payrex.checkoutSessions.retrieve(sessionId);
     
+    // Self-healing: If PayRex says paid but we haven't processed it (or just to be sure), update DB
+    if (session.payment_status === 'paid') {
+       await supabase.from('orders').update({
+          payment_status: 'PAID',
+          payment_method: 'QRPH'
+       }).eq('id', order_id);
+    }
+
     res.json({
       status: session.payment_status, // 'paid', 'unpaid'
       url: session.url
@@ -178,24 +187,6 @@ app.get('/orders/:order_id/payment-status', async (req, res) => {
   }
 });
 
-app.post('/payment/mock-confirm', async (req, res) => {
-  const { qr_id } = req.body;
-
-  const { data, error } = await supabase
-    .from('orders')
-    .update({
-      payment_status: 'PAID',
-      status: 'COMPLETED'
-    })
-    .eq('qr_id', qr_id)
-    .select();
-
-  if (error || !data || data.length === 0) {
-    return res.status(404).json({ detail: "Order not found for this QR" });
-  }
-
-  res.json({ status: "paid", qr_id });
-});
 
 app.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ detail: "No file uploaded" });

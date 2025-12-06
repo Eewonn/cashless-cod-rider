@@ -1,10 +1,11 @@
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, ActivityIndicator, View, Button, ScrollView, Image, Alert } from 'react-native';
+import { StyleSheet, ActivityIndicator, View, Button, ScrollView, Image, Alert, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import client from '@/api/client';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function OrderDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -13,19 +14,66 @@ export default function OrderDetailsScreen() {
   const [qrData, setQrData] = useState<any>(null);
   const [processing, setProcessing] = useState(false);
   const [podImage, setPodImage] = useState<string | null>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     fetchOrder();
   }, [id]);
 
+  // Poll for payment status if in PAYMENT state
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (order && order.status === 'PAYMENT' && order.payment_status !== 'PAID') {
+      interval = setInterval(() => {
+        checkPaymentStatus();
+      }, 5000); // Check every 5 seconds
+    }
+    return () => clearInterval(interval);
+  }, [order]);
+
   const fetchOrder = async () => {
     try {
       const response = await client.get(`/orders/${id}`);
-      setOrder(response.data);
+      const orderData = response.data;
+      setOrder(orderData);
+
+      // If we are in PAYMENT state but lost the QR data (e.g. refresh), try to recover it
+      if (orderData.status === 'PAYMENT' && orderData.qr_id && !qrData) {
+        recoverQrSession(orderData.id);
+      }
     } catch (err) {
       Alert.alert('Error', 'Failed to fetch order details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const recoverQrSession = async (orderId: string) => {
+    try {
+      const response = await client.get(`/orders/${orderId}/payment-status`);
+      if (response.data.url) {
+        setQrData({
+          qr: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(response.data.url)}`,
+          checkout_url: response.data.url,
+          expires_at: new Date().toISOString() // We don't have the real expiry, but that's okay for display
+        });
+      }
+    } catch (err) {
+      console.log("Could not recover QR session");
+    }
+  };
+
+  const checkPaymentStatus = async () => {
+    if (!order?.id) return;
+    try {
+      const response = await client.get(`/orders/${order.id}/payment-status`);
+      if (response.data.status === 'paid' || response.data.status === 'succeeded') {
+        // Payment confirmed!
+        Alert.alert("Payment Received", "The customer has paid successfully.");
+        fetchOrder(); // Refresh to update status to PAID
+      }
+    } catch (err) {
+      console.log("Error checking status", err);
     }
   };
 
@@ -116,20 +164,6 @@ export default function OrderDetailsScreen() {
     }
   };
 
-  const mockConfirmPayment = async () => {
-    if (!qrData?.qr_id) return;
-    setProcessing(true);
-    try {
-      await client.post('/payment/mock-confirm', { qr_id: qrData.qr_id });
-      Alert.alert('Success', 'Payment Confirmed!');
-      setQrData(null);
-      fetchOrder();
-    } catch (err) {
-      Alert.alert('Error', 'Payment confirmation failed');
-    } finally {
-      setProcessing(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -231,8 +265,8 @@ export default function OrderDetailsScreen() {
           )}
 
           {/* QR Display */}
-          {qrData && (order.status === 'PAYMENT' || order.status === 'ARRIVED') && (
-            <View style={styles.qrContainer}>
+          {qrData && (order.status === 'PAYMENT' || order.status === 'ARRIVED') && order.payment_status !== 'PAID' && (
+            <View style={[styles.qrContainer, { backgroundColor: theme === 'dark' ? '#1E1E1E' : '#fff' }]}>
               <ThemedText type="subtitle">Scan to Pay</ThemedText>
               <Image 
                 source={{ uri: qrData.qr }} 
@@ -240,15 +274,45 @@ export default function OrderDetailsScreen() {
               />
               <ThemedText>Expires at: {new Date(qrData.expires_at).toLocaleTimeString()}</ThemedText>
               
-              <View style={{ marginTop: 20 }}>
-                <Button 
-                  title="(Dev) Mock Confirm Payment" 
-                  onPress={mockConfirmPayment} 
-                  color="orange"
-                  disabled={processing}
-                />
+              {qrData.checkout_url && (
+                <View style={{ marginTop: 10 }}>
+                  <Button 
+                    title="Open Payment Link" 
+                    onPress={() => Linking.openURL(qrData.checkout_url)} 
+                    color="#007AFF"
+                    disabled={processing}
+                  />
+                </View>
+              )}
+
+              <View style={{ marginTop: 20, width: '100%', borderTopWidth: 1, borderTopColor: theme === 'dark' ? '#333' : '#eee', paddingTop: 20 }}>
+                  <Button 
+                    title="Complete Order" 
+                    onPress={() => {
+                        // Direct update without Alert to avoid browser/device issues
+                        updateStatus('COMPLETED');
+                    }} 
+                    color="green"
+                    disabled={processing}
+                  />
               </View>
             </View>
+          )}
+
+          {/* Payment Success & Completion */}
+          {order.status === 'PAYMENT' && order.payment_status === 'PAID' && (
+             <View style={[styles.qrContainer, { backgroundColor: theme === 'dark' ? '#1E1E1E' : '#fff' }]}>
+                <ThemedText type="subtitle" style={{ color: 'green', marginBottom: 10 }}>Payment Verified ✅</ThemedText>
+                <ThemedText style={{ marginBottom: 20 }}>The customer has paid via QR.</ThemedText>
+                <View style={{ width: '100%' }}>
+                  <Button 
+                    title="Complete Order" 
+                    onPress={() => updateStatus('COMPLETED')} 
+                    color="green"
+                    disabled={processing}
+                  />
+                </View>
+             </View>
           )}
 
           {order.status === 'COMPLETED' && (
@@ -285,7 +349,6 @@ const styles = StyleSheet.create({
   qrContainer: {
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#fff',
     borderRadius: 10,
     marginTop: 20,
   }
