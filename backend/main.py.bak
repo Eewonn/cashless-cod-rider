@@ -1,0 +1,251 @@
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
+from uuid import uuid4
+import os
+import requests  # Standard library for HTTP calls
+import base64    # Used for PayRex Authentication
+from dotenv import load_dotenv
+from datetime import datetime
+from supabase import create_client, Client
+
+# 1. Setup & Config
+load_dotenv()
+
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
+payrex_secret_key: str = os.environ.get("PAYREX_SECRET_KEY")
+
+if not all([url, key, payrex_secret_key]):
+    # This prevents the app from starting if keys are missing
+    raise ValueError("Missing environment variables. Check .env file.")
+
+supabase: Client = create_client(url, key)
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Models ---
+
+class Order(BaseModel):
+    id: str
+    order_no: str
+    rider_id: str
+    customer_name: str
+    address: str
+    cod_amount: float
+    status: str
+    payment_method: Optional[str] = None
+    payment_status: str
+    qr_id: Optional[str] = None
+    pod_url: Optional[str] = None
+    created_at: datetime
+
+class OrderStatusUpdate(BaseModel):
+    status: str
+    pod_url: Optional[str] = None
+
+class PaymentQRRequest(BaseModel):
+    order_id: str
+    amount: float
+
+class PaymentQRResponse(BaseModel):
+    qr: str
+    qr_id: str
+    expires_at: datetime
+
+class MockConfirmRequest(BaseModel):
+    qr_id: str
+
+# --- Helper Function for PayRex Auth ---
+def get_payrex_headers():
+    # PayRex uses Basic Auth with Secret Key as username and empty password
+    auth_string = f"{payrex_secret_key}:"
+    b64_auth = base64.b64encode(auth_string.encode()).decode()
+    return {
+        "Authorization": f"Basic {b64_auth}",
+        "Content-Type": "application/json"
+    }
+
+# --- Endpoints ---
+
+@app.get("/")
+def read_root():
+    return {"message": "Inspire Rider API is running"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+@app.get("/orders")
+def list_orders(rider_id: str = Query(..., description="ID of the rider")):
+    response = supabase.table('orders').select('*').eq('rider_id', rider_id).execute()
+    return response.data
+
+@app.get("/orders/{order_id}")
+def get_order(order_id: str):
+    try:
+        response = supabase.table('orders').select('*').eq('id', order_id).single().execute()
+        return response.data
+    except Exception:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+@app.patch("/orders/{order_id}/status")
+def update_order_status(order_id: str, update: OrderStatusUpdate):
+    data = {'status': update.status}
+    if update.pod_url:
+        data['pod_url'] = update.pod_url
+
+    response = supabase.table('orders').update(data).eq('id', order_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Log event
+    supabase.table('events').insert({
+        "id": str(uuid4()),
+        "order_id": order_id,
+        "type": "status_change",
+        "metadata": {"new_status": update.status}
+    }).execute()
+    
+    return {"status": "success", "order": response.data[0]}
+
+@app.post("/payment/qr", response_model=PaymentQRResponse)
+def generate_qr(request: PaymentQRRequest):
+    try:
+        # 1. Define PayRex URL and Payload
+        url = "https://api.payrexhq.com/v1/checkout_sessions"
+        
+        payload = {
+            "payment_methods": ["qrph"],
+            "line_items": [
+                {
+                    "name": f"Order #{request.order_id}",
+                    "quantity": 1,
+                    "amount": int(request.amount * 100), # Convert to centavos
+                    "currency": "PHP",
+                    "description": f"Payment for Order {request.order_id}"
+                }
+            ],
+            # Since this is an API, these URLs are where the user is redirected 
+            # AFTER scanning and paying on their phone.
+            "success_url": "https://google.com", # Replace with your success page later
+            "cancel_url": "https://google.com"
+        }
+
+        # 2. Send Request using standard Python library
+        response = requests.post(url, json=payload, headers=get_payrex_headers())
+        
+        # If PayRex returns an error (like 401 Auth), this raises an exception
+        response.raise_for_status() 
+        
+        session_data = response.json()
+        
+        # 3. Get the URL and create a QR code for it
+        checkout_url = session_data['url']
+        session_id = session_data['id']
+        qr_image = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={checkout_url}"
+        
+        # 4. Save Session ID to Supabase
+        supabase.table('orders').update({'qr_id': session_id}).eq('id', request.order_id).execute()
+
+        return {
+            "qr": qr_image,
+            "qr_id": session_id,
+            "expires_at": datetime.now() 
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"PayRex API Error: {e}")
+        # If response exists, try to print the error message from PayRex
+        detail = str(e)
+        if e.response is not None:
+             detail = e.response.text
+        raise HTTPException(status_code=500, detail=f"PayRex Error: {detail}")
+    except Exception as e:
+        print(f"Server Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/orders/{order_id}/payment-status")
+def get_payment_status(order_id: str):
+    # 1. Get Session ID from DB
+    order_response = supabase.table('orders').select('qr_id').eq('id', order_id).single().execute()
+    
+    if not order_response.data or not order_response.data.get('qr_id'):
+         raise HTTPException(status_code=404, detail="Order or Payment Session not found")
+    
+    session_id = order_response.data['qr_id']
+    
+    # 2. Manual Request to PayRex to check status
+    try:
+        url = f"https://api.payrexhq.com/v1/checkout_sessions/{session_id}"
+        
+        response = requests.get(url, headers=get_payrex_headers())
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        return {
+            "status": data['payment_status'], # 'paid', 'unpaid'
+            "url": data['url']
+        }
+    except Exception as e:
+        print(f"PayRex Status Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/payment/mock-confirm")
+def mock_confirm_payment(request: MockConfirmRequest):
+    response = supabase.table('orders').update({
+        'payment_status': 'PAID',
+        'status': 'COMPLETED'
+    }).eq('qr_id', request.qr_id).execute()
+    
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Order not found for this QR")
+
+    return {"status": "paid", "qr_id": request.qr_id}
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    file_content = await file.read()
+    file_path = f"pod/{uuid4()}_{file.filename}"
+    try:
+        supabase.storage.from_('pod').upload(file_path, file_content)
+        public_url = supabase.storage.from_('pod').get_public_url(file_path)
+        return {"url": public_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/payment/webhook")
+async def webhook_receiver(request: Request):
+    payload = await request.json()
+    
+    try:
+        supabase.table('webhook_logs').insert({'source': 'payrex', 'payload': payload}).execute()
+    except:
+        pass 
+
+    event_type = payload.get('type')
+    data = payload.get('data', {}).get('object', {})
+
+    if event_type == 'checkout.session.completed':
+        session_id = data.get('id')
+        supabase.table('orders').update({
+            'payment_status': 'PAID',
+            'payment_method': 'QRPH' 
+        }).eq('qr_id', session_id).execute()
+        print(f"Payment confirmed for Session {session_id}")
+
+    return {"status": "received"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,6 +1,7 @@
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, ActivityIndicator, View, Button, ScrollView, Image, Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import client from '@/api/client';
@@ -11,6 +12,7 @@ export default function OrderDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [qrData, setQrData] = useState<any>(null);
   const [processing, setProcessing] = useState(false);
+  const [podImage, setPodImage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrder();
@@ -27,14 +29,70 @@ export default function OrderDetailsScreen() {
     }
   };
 
-  const updateStatus = async (newStatus: string) => {
+  const updateStatus = async (newStatus: string, podUrl?: string) => {
     setProcessing(true);
     try {
-      await client.patch(`/orders/${id}/status`, { status: newStatus });
+      await client.patch(`/orders/${id}/status`, { 
+        status: newStatus,
+        pod_url: podUrl 
+      });
       fetchOrder(); // Refresh data
     } catch (err) {
       Alert.alert('Error', 'Failed to update status');
     } finally {
+      setProcessing(false);
+    }
+  };
+
+  const takePhoto = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    
+    if (permissionResult.granted === false) {
+      Alert.alert("Permission to access camera is required!");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setPodImage(result.assets[0].uri);
+    }
+  };
+
+  const uploadAndComplete = async () => {
+    if (!podImage) {
+      Alert.alert('Error', 'Please take a photo first');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: podImage,
+        name: 'pod.jpg',
+        type: 'image/jpeg',
+      } as any);
+
+      const uploadResponse = await client.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const podUrl = uploadResponse.data.url;
+      await updateStatus('COMPLETED', podUrl);
+      Alert.alert('Success', 'Order completed with Proof of Delivery!');
+      setPodImage(null);
+
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to upload photo');
       setProcessing(false);
     }
   };
@@ -106,6 +164,12 @@ export default function OrderDetailsScreen() {
           <ThemedText type="defaultSemiBold">Amount: ₱{order.cod_amount}</ThemedText>
           <ThemedText>Status: {order.status}</ThemedText>
           <ThemedText>Payment: {order.payment_status}</ThemedText>
+          {order.pod_url && (
+            <View style={{ marginTop: 10 }}>
+              <ThemedText type="defaultSemiBold">Proof of Delivery:</ThemedText>
+              <Image source={{ uri: order.pod_url }} style={{ width: '100%', height: 200, borderRadius: 8, marginTop: 5 }} />
+            </View>
+          )}
         </ThemedView>
 
         {/* Status Actions */}
@@ -133,12 +197,36 @@ export default function OrderDetailsScreen() {
                 onPress={generateQR} 
                 disabled={processing} 
               />
-              <Button 
-                title="Pay with Cash" 
-                onPress={() => updateStatus('COMPLETED')} 
-                color="green"
-                disabled={processing} 
-              />
+              
+              <View style={{ height: 1, backgroundColor: '#ccc', marginVertical: 10 }} />
+              
+              <ThemedText type="subtitle">Cash Payment (POD)</ThemedText>
+              
+              {!podImage ? (
+                <Button 
+                  title="Take Photo (POD)" 
+                  onPress={takePhoto} 
+                  disabled={processing} 
+                />
+              ) : (
+                <View>
+                  <Image source={{ uri: podImage }} style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 10 }} />
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <Button 
+                      title="Retake" 
+                      onPress={takePhoto} 
+                      color="gray"
+                      disabled={processing} 
+                    />
+                    <Button 
+                      title="Complete Order" 
+                      onPress={uploadAndComplete} 
+                      color="green"
+                      disabled={processing} 
+                    />
+                  </View>
+                </View>
+              )}
             </View>
           )}
 
