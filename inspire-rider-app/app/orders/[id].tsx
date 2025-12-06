@@ -2,6 +2,7 @@ import { useLocalSearchParams, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, ActivityIndicator, View, Button, ScrollView, Image, Alert, Linking, TouchableOpacity, Text } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -79,13 +80,17 @@ export default function OrderDetailsScreen() {
     }
   };
 
-  const updateStatus = async (newStatus: string, podUrl?: string) => {
+  const updateStatus = async (newStatus: string, podUrl?: string, location?: { latitude: number, longitude: number }) => {
     setProcessing(true);
     try {
-      await client.patch(`/orders/${id}/status`, { 
-        status: newStatus,
-        pod_url: podUrl 
-      });
+      const payload: any = { status: newStatus };
+      if (podUrl) payload.pod_url = podUrl;
+      if (location) {
+        payload.latitude = location.latitude;
+        payload.longitude = location.longitude;
+      }
+
+      await client.patch(`/orders/${id}/status`, payload);
       fetchOrder(); // Refresh data
     } catch (err) {
       Alert.alert('Error', 'Failed to update status');
@@ -122,6 +127,17 @@ export default function OrderDetailsScreen() {
 
     setProcessing(true);
     try {
+      // Get Location
+      let locationData = null;
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        locationData = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        };
+      }
+
       const formData = new FormData();
       formData.append('file', {
         uri: podImage,
@@ -136,13 +152,13 @@ export default function OrderDetailsScreen() {
       });
 
       const podUrl = uploadResponse.data.url;
-      await updateStatus('COMPLETED', podUrl);
+      await updateStatus('COMPLETED', podUrl, locationData);
       Alert.alert('Success', 'Order completed with Proof of Delivery!');
       setPodImage(null);
 
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to upload photo');
+      Alert.alert('Error', 'Failed to upload photo or get location');
       setProcessing(false);
     }
   };
@@ -316,7 +332,6 @@ export default function OrderDetailsScreen() {
                 source={{ uri: qrData.qr }} 
                 style={{ width: 200, height: 200, marginVertical: 10 }} 
               />
-              <ThemedText>Expires at: {new Date(qrData.expires_at).toLocaleTimeString()}</ThemedText>
               
               {qrData.checkout_url && (
                 <View style={{ marginTop: 10 }}>
@@ -357,9 +372,16 @@ export default function OrderDetailsScreen() {
           )}
 
           {order.status === 'COMPLETED' && (
-             <ThemedText style={{ color: 'green', textAlign: 'center', marginTop: 20 }}>
-               Order Completed ✅
-             </ThemedText>
+             <View style={{ alignItems: 'center', marginTop: 20 }}>
+               <ThemedText style={{ color: 'green', fontSize: 18, fontWeight: 'bold' }}>
+                 Order Completed ✅
+               </ThemedText>
+               {order.completed_at && (
+                 <ThemedText style={{ fontSize: 14, color: '#888', marginTop: 5 }}>
+                   {new Date(order.completed_at).toLocaleString()}
+                 </ThemedText>
+               )}
+             </View>
           )}
         </ThemedView>
 

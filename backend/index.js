@@ -85,10 +85,18 @@ app.get('/orders/:order_id', async (req, res) => {
 
 app.patch('/orders/:order_id/status', async (req, res) => {
   const { order_id } = req.params;
-  const { status, pod_url } = req.body;
+  const { status, pod_url, latitude, longitude } = req.body;
 
   const updateData = { status };
   if (pod_url) updateData.pod_url = pod_url;
+  
+  if (status === 'COMPLETED') {
+    updateData.completed_at = new Date().toISOString();
+    if (latitude && longitude) {
+      updateData.completed_latitude = latitude;
+      updateData.completed_longitude = longitude;
+    }
+  }
 
   const { data, error } = await supabase
     .from('orders')
@@ -105,7 +113,10 @@ app.patch('/orders/:order_id/status', async (req, res) => {
     id: uuidv4(),
     order_id: order_id,
     type: "status_change",
-    metadata: { new_status: status }
+    metadata: { 
+      new_status: status,
+      location: (latitude && longitude) ? { lat: latitude, lng: longitude } : null
+    }
   });
 
   res.json({ status: "success", order: data[0] });
